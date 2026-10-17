@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI角色互動動態狀態欄生成器 (AI Character Interactive Status HUD Builder)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f3ff',
+              100: '#d9e2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            }
+          },
+          fontFamily: {
+            pixel: ['"Press Start 2P"', 'monospace'],
+            sans: ['"Noto Sans TC"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.7); }
+
+    /* Custom Animations */
+    @keyframes waveFlow {
+      0% { transform: translateX(0) translateZ(0) scaleY(1); }
+      50% { transform: translateX(-25%) translateZ(0) scaleY(0.85); }
+      100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+    }
+    .animate-wave {
+      animation: waveFlow 4s linear infinite;
+    }
+
+    @keyframes shimmerFlow {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
+    }
+    .animate-shimmer {
+      animation: shimmerFlow 2.2s infinite;
+    }
+
+    @keyframes bubbleRise {
+      0% { transform: translateY(100%) scale(0.3); opacity: 0; }
+      50% { opacity: 0.8; }
+      100% { transform: translateY(-120%) scale(1.2); opacity: 0; }
+    }
+    .animate-bubble {
+      animation: bubbleRise 2.5s infinite ease-in;
+    }
+
+    @keyframes rainbowMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .animate-rainbow {
+      background-size: 200% 200%;
+      animation: rainbowMove 3s ease infinite;
+    }
+
+    @keyframes lowHpPulse {
+      0%, 100% { box-shadow: inset 0 0 15px rgba(239, 68, 68, 0.4), 0 0 15px rgba(239, 68, 68, 0.3); }
+      50% { box-shadow: inset 0 0 35px rgba(239, 68, 68, 0.8), 0 0 30px rgba(239, 68, 68, 0.7); }
+    }
+    .hud-state-low-hp {
+      animation: lowHpPulse 1.2s infinite ease-in-out;
+      border-color: #ef4444 !important;
+    }
+
+    @keyframes rageAura {
+      0%, 100% { filter: drop-shadow(0 0 8px #f97316) drop-shadow(0 0 15px #ef4444); }
+      50% { filter: drop-shadow(0 0 18px #eab308) drop-shadow(0 0 25px #dc2626); }
+    }
+    .hud-state-rage {
+      animation: rageAura 0.8s infinite ease-in-out;
+    }
+
+    @keyframes glitchShake {
+      0% { transform: translate(0,0) skew(0deg); }
+      20% { transform: translate(-3px, 2px) skew(2deg); }
+      40% { transform: translate(3px, -1px) skew(-2deg); }
+      60% { transform: translate(-2px, -2px) skew(1deg); }
+      80% { transform: translate(2px, 1px) skew(-1deg); }
+      100% { transform: translate(0,0) skew(0deg); }
+    }
+    .hud-state-glitch {
+      animation: glitchShake 0.25s infinite;
+    }
+
+    /* Burst Particle Effect Container */
+    .burst-particle {
+      position: absolute;
+      pointer-events: none;
+      animation: particlePop 0.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+      z-index: 100;
+    }
+
+    @keyframes particlePop {
+      0% { transform: translate(0, 0) scale(0.4) rotate(0deg); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(1.3) rotate(var(--rot)); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Header Navigation -->
+  <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-between p-2 shadow-lg shadow-indigo-500/20">
+        <i class="fa-solid fa-gamepad text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg leading-tight bg-gradient-to-r from-indigo-300 via-purple-200 to-pink-300 bg-clip-text text-transparent">
+          AI 角色互動動態狀態欄生成器
+        </h1>
+        <p class="text-xs text-slate-400">AI Roleplay Status HUD & Pixel Accessory Engine v3.6</p>
+      </div>
+    </div>
+
+    <!-- Quick State Simulation Switches (Dynamically Rendered) -->
+    <div id="top-sim-bar" class="hidden md:flex items-center space-x-2 bg-slate-950/60 p-1.5 rounded-xl border border-slate-800 text-xs overflow-x-auto max-w-lg">
+      <!-- Generated by JS -->
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <button onclick="playSFX('coin')" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs flex items-center space-x-1 border border-slate-700">
+        <i class="fa-solid fa-volume-high"></i>
+        <span class="hidden sm:inline">測試音效</span>
+      </button>
+      <button onclick="resetToDefaults()" class="p-2 bg-slate-800 hover:bg-red-900/40 text-slate-300 hover:text-red-300 rounded-lg text-xs flex items-center space-x-1 border border-slate-700">
+        <i class="fa-solid fa-rotate-left"></i>
+        <span class="hidden sm:inline">重置</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
+
+    <!-- LEFT PANEL: Editor Controls (Tabs) -->
+    <div class="lg:col-span-6 xl:col-span-5 bg-slate-900/50 border-r border-slate-800/80 flex flex-col h-[calc(100vh-61px)] overflow-hidden">
+      
+      <!-- Control Tabs Navigation -->
+      <div class="flex border-b border-slate-800 bg-slate-900/80 overflow-x-auto no-scrollbar">
+        <button onclick="switchTab('basic')" id="tab-btn-basic" class="tab-btn px-4 py-3 text-xs font-medium text-indigo-400 border-b-2 border-indigo-500 whitespace-nowrap flex items-center space-x-1.5 bg-slate-800/40">
+          <i class="fa-solid fa-sliders"></i><span>基本與主題</span>
+        </button>
+        <button onclick="switchTab('states')" id="tab-btn-states" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-mask"></i><span>模擬狀態管理</span>
+        </button>
+        <button onclick="switchTab('fields')" id="tab-btn-fields" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-list-check"></i><span>動態欄位</span>
+        </button>
+        <button onclick="switchTab('progress')" id="tab-btn-progress" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-chart-simple"></i><span>條狀圖與特效</span>
+        </button>
+        <button onclick="switchTab('pixel')" id="tab-btn-pixel" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles"></i><span>像素轉換引擎</span>
+        </button>
+        <button onclick="switchTab('gallery')" id="tab-btn-gallery" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-gem text-amber-400"></i><span>內建飾品庫</span>
+        </button>
+        <button onclick="switchTab('export')" id="tab-btn-export" class="tab-btn px-4 py-3 text-xs font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent whitespace-nowrap flex items-center space-x-1.5">
+          <i class="fa-solid fa-file-export"></i><span>代碼與導出</span>
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-5 text-sm">
+
+        <!-- TAB 1: BASIC & THEME -->
+        <div id="tab-content-basic" class="tab-content space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-user-gear text-indigo-400"></i><span>角色頭像與稱號</span>
+            </h3>
+            
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">角色姓名 ({{char}})</label>
+                <input type="text" id="cfg-char-name" value="愛莉絲 (Alice)" oninput="updateHUD()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">稱號 / 身份</label>
+                <input type="text" id="cfg-char-title" value="魔導王國首席宮廷大導師" oninput="updateHUD()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">頭像圖片網址 (URL)</label>
+              <div class="flex items-center space-x-2">
+                <input type="text" id="cfg-avatar-url" value="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" oninput="updateAvatarSource()" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none font-mono">
+                <label class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg cursor-pointer transition flex items-center space-x-1 shrink-0">
+                  <i class="fa-solid fa-upload"></i><span>上傳圖片</span>
+                  <input type="file" accept="image/*" class="hidden" onchange="handleFileUpload(event, 'avatar')">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Theme Colors & Card Geometry -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-palette text-indigo-400"></i><span>主題配色與面板樣式</span>
+            </h3>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">背景底色</label>
+                <div class="flex items-center space-x-2">
+                  <input type="color" id="cfg-bg-color" value="#0f172a" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                  <span id="val-bg-color" class="text-xs font-mono text-slate-400">#0f172a</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">主要文字顏色</label>
+                <div class="flex items-center space-x-2">
+                  <input type="color" id="cfg-text-color" value="#f8fafc" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                  <span id="val-text-color" class="text-xs font-mono text-slate-400">#f8fafc</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">邊框顏色</label>
+                <div class="flex items-center space-x-2">
+                  <input type="color" id="cfg-border-color" value="#6366f1" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                  <span id="val-border-color" class="text-xs font-mono text-slate-400">#6366f1</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">外發光 Glow 顏色</label>
+                <div class="flex items-center space-x-2">
+                  <input type="color" id="cfg-glow-color" value="#818cf8" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                  <span id="val-glow-color" class="text-xs font-mono text-slate-400">#818cf8</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="space-y-3 pt-2">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">背景透明度 (Opacity)</span>
+                  <span id="val-bg-opacity" class="text-indigo-400 font-mono">85%</span>
+                </div>
+                <input type="range" id="cfg-bg-opacity" min="10" max="100" value="85" oninput="syncVal('bg-opacity', '%'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">毛玻璃模糊 (Backdrop Blur)</span>
+                  <span id="val-bg-blur" class="text-indigo-400 font-mono">12px</span>
+                </div>
+                <input type="range" id="cfg-bg-blur" min="0" max="30" value="12" oninput="syncVal('bg-blur', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">外發光強度 (Glow Spread)</span>
+                  <span id="val-glow-intensity" class="text-indigo-400 font-mono">15px</span>
+                </div>
+                <input type="range" id="cfg-glow-intensity" min="0" max="40" value="15" oninput="syncVal('glow-intensity', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">面板外圓角 (Border Radius)</span>
+                  <span id="val-border-radius" class="text-indigo-400 font-mono">16px</span>
+                </div>
+                <input type="range" id="cfg-border-radius" min="0" max="32" value="16" oninput="syncVal('border-radius', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">外框線粗細 (Border Width)</span>
+                  <span id="val-border-width" class="text-indigo-400 font-mono">2px</span>
+                </div>
+                <input type="range" id="cfg-border-width" min="0" max="6" value="2" oninput="syncVal('border-width', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 1.5: HUD STATES EDITOR -->
+        <div id="tab-content-states" class="tab-content hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">HUD 模擬狀態設定</h3>
+              <p class="text-[11px] text-slate-400 mt-0.5">自訂頂部狀態、自動觸發條件、視覺特效與音效</p>
+            </div>
+            <button onclick="addCustomHUDState()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1">
+              <i class="fa-solid fa-plus"></i><span>新增自訂狀態</span>
+            </button>
+          </div>
+
+          <div id="states-editor-container" class="space-y-3">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- TAB 2: DYNAMIC FIELDS & SECTIONS -->
+        <div id="tab-content-fields" class="tab-content hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">自訂狀態大標題與子欄位</h3>
+            <button onclick="addSection()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1">
+              <i class="fa-solid fa-plus"></i><span>新增大標題分組</span>
+            </button>
+          </div>
+
+          <!-- Dynamic Sections List -->
+          <div id="sections-container" class="space-y-4">
+            <!-- Rendered dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- TAB 3: PROGRESS BARS & ANIMATIONS -->
+        <div id="tab-content-progress" class="tab-content hidden space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-wand-magic text-purple-400"></i><span>進度條渲染樣式與動態視覺</span>
+            </h3>
+
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">全局進度條視覺風格</label>
+              <select id="cfg-bar-style" onchange="updateHUD()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-indigo-500">
+                <option value="favor-shift">💖 好感度動態漸變 (藍<25% -> 紫50% -> 桃75% -> 紅100%)</option>
+                <option value="liquid-bubbles">🫧 沉浸液體上升氣泡 (Liquid Bubbles)</option>
+                <option value="fluid-wave">🌊 雙層動態流體波浪 (Fluid Wave)</option>
+                <option value="shimmer">✨ 高光流金光耀 (Shimmer Light Flow)</option>
+                <option value="rainbow">🌈 霓虹彩虹跑馬燈 (Rainbow Gradient)</option>
+                <option value="crt-pixel">👾 8-Bit CRT 復古像素塊 (Retro Chunks)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">進度條預設填滿色</label>
+                <input type="color" id="cfg-bar-fill" value="#ec4899" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">進度條底槽軌道色</label>
+                <input type="color" id="cfg-bar-track" value="#1e293b" onchange="updateHUD()" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+              </div>
+            </div>
+
+            <div class="space-y-3 pt-2">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">進度條高度 (Height)</span>
+                  <span id="val-bar-height" class="text-indigo-400 font-mono">14px</span>
+                </div>
+                <input type="range" id="cfg-bar-height" min="8" max="28" value="14" oninput="syncVal('bar-height', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">進度條圓角 (Bar Radius)</span>
+                  <span id="val-bar-radius" class="text-indigo-400 font-mono">8px</span>
+                </div>
+                <input type="range" id="cfg-bar-radius" min="0" max="14" value="8" oninput="syncVal('bar-radius', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: DUAL PIXEL ART ENGINE -->
+        <div id="tab-content-pixel" class="tab-content hidden space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+                <i class="fa-solid fa-gamepad text-emerald-400"></i><span>雙通道像素轉換引擎 (Pixel Engine)</span>
+              </h3>
+              <label class="inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="cfg-pixel-enable" onchange="updatePixelArtProcess()" class="sr-only peer">
+                <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                <span class="ml-2 text-xs font-medium text-slate-300">啟用像素轉換</span>
+              </label>
+            </div>
+
+            <p class="text-xs text-slate-400 leading-relaxed">
+              可將角色頭像及當前飾品即時進行硬體調色盤點陣化處理 (Game Boy / Cyberpunk / PICO-8 等)。
+            </p>
+
+            <!-- Custom Pixel Art File Upload -->
+            <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
+              <label class="block text-xs text-indigo-400 font-medium">
+                <i class="fa-solid fa-file-image mr-1"></i>上傳專屬像素頭像 / 圖片
+              </label>
+              <div class="flex items-center space-x-2">
+                <label class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1.5 px-3 rounded-lg cursor-pointer text-center font-medium transition flex items-center justify-center space-x-1.5">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <span>選擇本地圖片檔案</span>
+                  <input type="file" accept="image/*" class="hidden" onchange="handleFileUpload(event, 'pixel')">
+                </label>
+              </div>
+            </div>
+
+            <div class="space-y-3 pt-2">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">硬體限制調色盤 (Palette)</label>
+                <select id="cfg-pixel-palette" onchange="updatePixelArtProcess()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200">
+                  <option value="none">原圖真彩色 (Full Color Pixelated)</option>
+                  <option value="gameboy">🟢 Game Boy 4-Color Classic Green</option>
+                  <option value="cyberpunk">🌆 Cyberpunk Neon 16-Color</option>
+                  <option value="pico8">🎮 PICO-8 Retro Fantasy Console</option>
+                  <option value="nes">📺 NES 8-Bit Nostalgia</option>
+                  <option value="monochrome">⚫ B&W Monochrome high-contrast</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">點陣網格解析度 (Pixel Factor)</span>
+                  <span id="val-pixel-factor" class="text-indigo-400 font-mono">64 px</span>
+                </div>
+                <input type="range" id="cfg-pixel-factor" min="16" max="128" step="4" value="64" oninput="syncVal('pixel-factor', ' px'); updatePixelArtProcess();" class="w-full accent-indigo-500">
+              </div>
+
+              <div class="flex items-center justify-between pt-1">
+                <span class="text-xs text-slate-400">啟用 Dithering 抖動網點</span>
+                <input type="checkbox" id="cfg-pixel-dither" onchange="updatePixelArtProcess()" class="rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: BUILT-IN PIXEL SPRITE & ACCESSORY GALLERY -->
+        <div id="tab-content-gallery" class="tab-content hidden space-y-4">
+          <!-- Custom Accessory Upload Section -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-upload"></i><span>自訂上傳飾品 (Custom Accessory)</span>
+            </h3>
+            <p class="text-xs text-slate-400">您可以上傳自訂的 PNG 透明背景圖片或 SVG 向量圖示作為動態飾品。</p>
+            <div class="flex items-center space-x-2">
+              <label class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-2 px-3 rounded-xl cursor-pointer text-center font-medium transition flex items-center justify-center space-x-2 shadow-lg">
+                <i class="fa-solid fa-file-circle-plus text-sm"></i>
+                <span>上傳自訂飾品檔 (PNG / SVG)</span>
+                <input type="file" id="file-accessory-upload" accept="image/png,image/svg+xml,image/webp,image/gif" class="hidden" onchange="handleFileUpload(event, 'accessory')">
+              </label>
+            </div>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-gem"></i><span>內建點陣圖飾品圖庫 (Preset Gallery)</span>
+            </h3>
+            <p class="text-xs text-slate-400">點擊任意圖示即可快速新增至 HUD 飾品層！</p>
+
+            <!-- Sprite Categories -->
+            <div class="space-y-4 pt-2">
+              <div>
+                <h4 class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">⚔️ 武器與裝備</h4>
+                <div class="grid grid-cols-5 gap-2" id="gallery-weapons"></div>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">👑 頭飾與皇冠</h4>
+                <div class="grid grid-cols-5 gap-2" id="gallery-headwear"></div>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">❤️ 狀態與表情光環</h4>
+                <div class="grid grid-cols-5 gap-2" id="gallery-status"></div>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">🐾 寵物與吉祥物</h4>
+                <div class="grid grid-cols-5 gap-2" id="gallery-pets"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Accessory Control Box -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+              <span>已放置飾品屬性微調</span>
+              <button onclick="removeActiveAccessory()" class="text-red-400 hover:text-red-300 text-xs flex items-center space-x-1">
+                <i class="fa-solid fa-trash"></i><span>移除飾品</span>
+              </button>
+            </h3>
+
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">水平偏移 (Offset X)</span>
+                  <span id="val-acc-x" class="text-indigo-400 font-mono">0px</span>
+                </div>
+                <input type="range" id="cfg-acc-x" min="-150" max="150" value="0" oninput="syncVal('acc-x', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">垂直偏移 (Offset Y)</span>
+                  <span id="val-acc-y" class="text-indigo-400 font-mono">0px</span>
+                </div>
+                <input type="range" id="cfg-acc-y" min="-150" max="150" value="0" oninput="syncVal('acc-y', 'px'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">縮放大小 (Scale)</span>
+                  <span id="val-acc-scale" class="text-indigo-400 font-mono">1.0x</span>
+                </div>
+                <input type="range" id="cfg-acc-scale" min="0.2" max="3.0" step="0.1" value="1.0" oninput="syncVal('acc-scale', 'x'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-slate-400">旋轉角度 (Rotation)</span>
+                  <span id="val-acc-rot" class="text-indigo-400 font-mono">0°</span>
+                </div>
+                <input type="range" id="cfg-acc-rot" min="-180" max="180" value="0" oninput="syncVal('acc-rot', '°'); updateHUD();" class="w-full accent-indigo-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 6: EXPORT & CODE GENERATOR -->
+        <div id="tab-content-export" class="tab-content hidden space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-code"></i><span>嵌入式 HTML/CSS/JS 代碼生成</span>
+            </h3>
+            <p class="text-xs text-slate-400">可直接複製嵌入個人網頁、SillyTavern 提示詞或 HTML 視窗中！</p>
+            <button onclick="generateHTMLEmbedCode()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-lg text-xs flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-copy"></i><span>生成並複製全功能 HTML Code</span>
+            </button>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-robot"></i><span>AI Roleplay System Prompt 綁定</span>
+            </h3>
+            <p class="text-xs text-slate-400">包含 <code class="text-amber-300">{{char}}</code> 與 <code class="text-amber-300">{{user}}</code> 動態變數格式化 Prompt。</p>
+            <button onclick="generateAIPrompt()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2 rounded-lg text-xs flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-terminal"></i><span>複製 AI System Prompt 語法</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="exportPNG()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-lg">
+              <i class="fa-solid fa-file-image"></i><span>截圖導出 PNG</span>
+            </button>
+            <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 border border-slate-700">
+              <i class="fa-solid fa-file-json"></i><span>備份匯出 JSON</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Real-time Live HUD Preview -->
+    <div class="lg:col-span-6 xl:col-span-7 bg-slate-950 p-6 flex flex-col items-center justify-center min-h-[500px] relative overflow-hidden bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px]">
+      
+      <!-- Top Canvas Controls Banner -->
+      <div class="absolute top-4 left-4 right-4 flex items-center justify-between text-xs text-slate-400">
+        <span class="flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>即時渲染預覽 (Live Interactive Preview)</span>
+        </span>
+        <span class="text-slate-500 font-mono">點擊 HUD 可觸發互動特效與 8-Bit 音效</span>
+      </div>
+
+      <!-- Preview HUD Container -->
+      <div id="hud-preview-wrapper" onclick="triggerBurstFX(event)" class="relative transition-all duration-300 cursor-pointer my-auto max-w-xl w-full">
+        <!-- Accessory Layer -->
+        <div id="hud-accessory-layer" class="absolute pointer-events-none z-20 transition-all duration-150"></div>
+
+        <!-- Main Dynamic HUD Box -->
+        <div id="hud-card" class="relative z-10 transition-all duration-300 overflow-hidden">
+          <!-- Card Header / Profile -->
+          <div class="p-4 flex items-center space-x-4 border-b border-slate-800/60" id="hud-header">
+            <div class="relative">
+              <img id="hud-avatar-img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" class="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-md">
+              <canvas id="hud-avatar-canvas" class="w-16 h-16 rounded-2xl border-2 border-indigo-500/50 shadow-md hidden"></canvas>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <h2 id="hud-char-name" class="font-bold text-lg text-slate-100 truncate">愛莉絲 (Alice)</h2>
+                <span id="hud-state-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">狀態: 正常</span>
+              </div>
+              <p id="hud-char-title" class="text-xs text-slate-400 truncate mt-0.5">魔導王國首席宮廷大導師</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Sections & Subfields -->
+          <div id="hud-sections-render" class="p-4 space-y-4">
+            <!-- Dynamically Rendered -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Hidden Code Modal -->
+  <div id="code-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[80vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <h3 id="modal-title" class="font-bold text-sm text-slate-200">生成代碼</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div class="p-4 flex-1 overflow-y-auto">
+        <textarea id="modal-code-area" class="w-full h-80 bg-slate-950 font-mono text-xs text-slate-300 p-3 rounded-xl border border-slate-800 focus:outline-none" readonly></textarea>
+      </div>
+      <div class="p-4 border-t border-slate-800 flex justify-end space-x-2">
+        <button onclick="copyModalCode()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-medium">複製到剪貼簿</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    /* ================= SYSTEM STATE ================= */
+    let hudData = {
+      name: "愛莉絲 (Alice)",
+      title: "魔導王國首席宮廷大導師",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+      bgColor: "#0f172a",
+      textColor: "#f8fafc",
+      borderColor: "#6366f1",
+      glowColor: "#818cf8",
+      bgOpacity: 85,
+      bgBlur: 12,
+      borderWidth: 2,
+      borderRadius: 16,
+      glowIntensity: 15,
+      barStyle: "favor-shift",
+      barFill: "#ec4899",
+      barTrack: "#1e293b",
+      barHeight: 14,
+      barRadius: 8,
+      currentState: "normal",
+      // Customizable HUD States Definition
+      customStates: [
+        { id: "normal", name: "正常", badgeText: "狀態: 正常", effect: "none", sfx: "none", triggerFieldId: "", triggerOp: "<=", triggerVal: 0 },
+        { id: "low-hp", name: "低血量警告", badgeText: "⚠️ 低血量警報", effect: "low-hp", sfx: "glitch", triggerFieldId: "f-1", triggerOp: "<=", triggerVal: 30 },
+        { id: "love", name: "好感暴走", badgeText: "💖 好感暴走", effect: "none", sfx: "heart", triggerFieldId: "f-1", triggerOp: ">=", triggerVal: 90 },
+        { id: "rage", name: "狂暴氣場", badgeText: "🔥 狂暴氣場", effect: "rage", sfx: "levelUp", triggerFieldId: "f-2", triggerOp: ">=", triggerVal: 80 },
+        { id: "glitch", name: "系統 Glitch", badgeText: "👾 Glitch 異常", effect: "glitch", sfx: "glitch", triggerFieldId: "", triggerOp: "<=", triggerVal: 0 }
+      ],
+      pixel: {
+        enable: false,
+        palette: "none",
+        factor: 64,
+        dither: false
+      },
+      accessory: {
+        svgKey: null,
+        offsetX: 0,
+        offsetY: 0,
+        scale: 1.0,
+        rotation: 0
+      },
+      sections: [
+        {
+          id: "sec-1",
+          title: "核心角色屬性 (Core Status)",
+          isOpen: true,
+          fields: [
+            { id: "f-1", type: "progressbar", name: "好感度 (Favorability)", value: 85, max: 100 },
+            { id: "f-2", type: "progressbar", name: "魔力值 (MP Gauge)", value: 62, max: 100 },
+            { id: "f-3", type: "heart", name: "心情好感指數", rating: 4, max: 5 },
+            { id: "f-4", type: "badge", name: "目前狀態", text: "魔法研究中 📖" }
+          ]
+        },
+        {
+          id: "sec-2",
+          title: "動態特殊狀態 (Special State)",
+          isOpen: true,
+          fields: [
+            { id: "f-5", type: "numeric", name: "親密度 Level", val: 42 },
+            { id: "f-6", type: "text", name: "專屬對話稱呼", text: "親愛的冒險者" }
+          ]
+        }
+      ]
+    };
+
+    /* Built-in Pixel SVG Presets Gallery */
+    const PRESET_GALLERY = {
+      weapons: [
+        { id: "w-sword", name: "聖劍", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#facc15" d="M3 21v-3h3v3H3zm3-3v-3h3v3H6zm12-12h3V3h-3v3zm-3 3h3V6h-3v3zm-3 3h3V9h-3v3zm-3 3h3v-3h-3v3z"/><path fill="#e2e8f0" d="M15 6h3V3h-3v3zm-3 3h3V6h-3v3zm-3 3h3V9h-3v3zm-3 3h3v-3H9v3z"/></svg>` },
+        { id: "w-wand", name: "法杖", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#c084fc" d="M18 3h3v3h-3zM15 6h3v3h-3zm6 0h3v3h-3z"/><path fill="#ec4899" d="M18 6h3v3h-3z"/><path fill="#854d0e" d="M3 21v-3h3v3H3zm3-3v-3h3v3H6zm3-3v-3h3v3H9zm3-3v-3h3v3h-3z"/></svg>` },
+        { id: "w-shield", name: "盾牌", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#3b82f6" d="M4 4h16v8c0 5-4 8-8 10C8 20 4 17 4 12V4z"/><path fill="#f8fafc" d="M11 7h2v10h-2zM7 11h10v2H7z"/></svg>` }
+      ],
+      headwear: [
+        { id: "h-crown", name: "皇冠", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#facc15" d="M3 17h18v3H3zm0-10l4 4 5-6 5 6 4-4v10H3V7z"/><circle cx="3" cy="6" r="1.5" fill="#ef4444"/><circle cx="12" cy="4" r="1.5" fill="#3b82f6"/><circle cx="21" cy="6" r="1.5" fill="#ef4444"/></svg>` },
+        { id: "h-halo", name: "天使光環", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><ellipse cx="12" cy="8" rx="8" ry="3" fill="none" stroke="#fef08a" stroke-width="2.5"/><ellipse cx="12" cy="8" rx="8" ry="3" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="2 2"/></svg>` },
+        { id: "h-horns", name: "惡魔角", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#ef4444" d="M4 12c0-5 3-9 6-10-1 4-2 7-6 10zm16 0c0-5-3-9-6-10 1 4 2 7 6 10z"/></svg>` }
+      ],
+      status: [
+        { id: "s-heart", name: "懸浮愛心", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#ec4899" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` },
+        { id: "s-fire", name: "火焰氣場", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#f97316" d="M12 23c4.97 0 9-3.58 9-8 0-4.19-3.41-7.5-6.15-10.72-1.05 3.32-3.15 4.88-4.85 2.72C8.6 5.2 12 2 12 2S6 5.5 6 11c0 4.42 2.03 8 6 12z"/><path fill="#facc15" d="M12 22c2.76 0 5-2.01 5-4.5 0-2.35-1.9-4.21-3.44-6.02-.59 1.86-1.76 2.73-2.71 1.52C10.1 12.03 12 10.24 12 10.24S8.64 12.2 8.64 15.28c0 2.48 1.13 4.48 3.36 6.72z"/></svg>` },
+        { id: "s-sparkle", name: "魔法星光", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#a855f7" d="M12 2l2.4 7.2L21.6 12l-7.2 2.4L12 21.6l-2.4-7.2L2.4 12l7.2-2.4z"/></svg>` }
+      ],
+      pets: [
+        { id: "p-slime", name: "史萊姆", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#10b981" d="M12 4C7 4 3 8 3 14c0 4 4 6 9 6s9-2 9-6c0-6-4-10-9-10z"/><circle cx="9" cy="12" r="1.5" fill="#ffffff"/><circle cx="15" cy="12" r="1.5" fill="#ffffff"/><circle cx="9.5" cy="12" r="0.8" fill="#000000"/><circle cx="15.5" cy="12" r="0.8" fill="#000000"/></svg>` },
+        { id: "p-cat", name: "黑貓", svg: `<svg viewBox="0 0 24 24" class="w-10 h-10"><path fill="#1e293b" d="M4 4l4 4h8l4-4v8c0 5-4 9-10 9S2 17 2 12V4z"/><ellipse cx="8" cy="12" rx="1.5" ry="2" fill="#facc15"/><ellipse cx="16" cy="12" rx="1.5" ry="2" fill="#facc15"/></svg>` }
+      ]
+    };
+
+    /* Helper Function for Syncing Slider Values */
+    function syncVal(id, unit) {
+      const val = document.getElementById(`cfg-${id}`).value;
+      const display = document.getElementById(`val-${id}`);
+      if (display) display.innerText = val + unit;
+    }
+
+    /* Helper to get all numeric & progressbar fields for trigger selector */
+    function getAllTriggerableFields() {
+      const options = [];
+      hudData.sections.forEach(sec => {
+        sec.fields.forEach(f => {
+          if (f.type === 'progressbar' || f.type === 'numeric' || f.type === 'heart') {
+            options.push({ id: f.id, name: `${sec.title.split(' ')[0]} - ${f.name}` });
+          }
+        });
+      });
+      return options;
+    }
+
+    /* Get Field Value by ID */
+    function getFieldValueById(fieldId) {
+      for (const sec of hudData.sections) {
+        for (const f of sec.fields) {
+          if (f.id === fieldId) {
+            if (f.type === 'progressbar') return f.value;
+            if (f.type === 'numeric') return f.val;
+            if (f.type === 'heart') return f.rating;
+          }
+        }
+      }
+      return null;
+    }
+
+    /* Check and Evaluate Auto State Triggers */
+    function checkAutoStateTriggers() {
+      for (const st of hudData.customStates) {
+        if (!st.triggerFieldId) continue;
+        const currentVal = getFieldValueById(st.triggerFieldId);
+        if (currentVal === null) continue;
+
+        let triggered = false;
+        const targetVal = Number(st.triggerVal);
+
+        if (st.triggerOp === '<=' && currentVal <= targetVal) triggered = true;
+        else if (st.triggerOp === '>=' && currentVal >= targetVal) triggered = true;
+        else if (st.triggerOp === '==' && currentVal == targetVal) triggered = true;
+        else if (st.triggerOp === '<' && currentVal < targetVal) triggered = true;
+        else if (st.triggerOp === '>' && currentVal > targetVal) triggered = true;
+
+        if (triggered && hudData.currentState !== st.id) {
+          setHUDState(st.id, true);
+          break; // Trigger highest priority match first
+        }
+      }
+    }
+
+    /* ================= INITIALIZATION ================= */
+    window.onload = function() {
+      renderGallery();
+      renderSectionsEditPanel();
+      renderStatesEditPanel();
+      renderTopStateButtons();
+      updateHUD();
+    };
+
+    /* Render Top Header Simulation Buttons Dynamically */
+    function renderTopStateButtons() {
+      const navContainer = document.getElementById('top-sim-bar');
+      if (!navContainer) return;
+
+      let html = `<span class="text-slate-400 px-2 font-medium shrink-0">HUD 狀態模擬:</span>`;
+      hudData.customStates.forEach(st => {
+        const isActive = st.id === hudData.currentState;
+        const activeClass = isActive ? "bg-indigo-600 text-white font-medium shadow" : "bg-slate-800 text-slate-300 hover:bg-slate-700";
+        html += `<button onclick="setHUDState('${st.id}', false)" class="px-2.5 py-1 rounded-lg transition whitespace-nowrap ${activeClass}" id="btn-state-${st.id}">${st.name}</button>`;
+      });
+
+      navContainer.innerHTML = html;
+    }
+
+    /* Render HUD State Management Panel */
+    function renderStatesEditPanel() {
+      const container = document.getElementById('states-editor-container');
+      if (!container) return;
+
+      const triggerFields = getAllTriggerableFields();
+
+      container.innerHTML = hudData.customStates.map((st, idx) => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-indigo-400">狀態 #${idx + 1} (${st.id})</span>
+            ${hudData.customStates.length > 1 ? `
+              <button onclick="removeHUDState(${idx})" class="text-red-400 hover:text-red-300 text-xs p-1">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            ` : ''}
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">按鈕顯示名稱</label>
+              <input type="text" value="${st.name}" onchange="updateHUDStateProp(${idx}, 'name', this.value)" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">HUD 徽章標籤文字</label>
+              <input type="text" value="${st.badgeText}" onchange="updateHUDStateProp(${idx}, 'badgeText', this.value)" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200">
+            </div>
+          </div>
+
+          <!-- 数值指定自动触发条件 -->
+          <div class="p-2 bg-slate-950/80 border border-indigo-500/20 rounded-lg space-y-2">
+            <label class="block text-[11px] text-indigo-300 font-bold flex items-center space-x-1">
+              <i class="fa-solid fa-bolt text-amber-400"></i><span>指定數值自動觸發條件</span>
+            </label>
+            <div class="grid grid-cols-12 gap-1.5 items-center">
+              <select onchange="updateHUDStateProp(${idx}, 'triggerFieldId', this.value)" class="col-span-5 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-[11px] text-slate-200">
+                <option value="">-- 手動切換 (無條件) --</option>
+                ${triggerFields.map(f => `<option value="${f.id}" ${st.triggerFieldId === f.id ? 'selected' : ''}>${f.name}</option>`).join('')}
+              </select>
+
+              <select onchange="updateHUDStateProp(${idx}, 'triggerOp', this.value)" class="col-span-3 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-[11px] text-slate-200 font-mono">
+                <option value="<=" ${st.triggerOp === '<=' ? 'selected' : ''}>≤</option>
+                <option value=">=" ${st.triggerOp === '>=' ? 'selected' : ''}>≥</option>
+                <option value="==" ${st.triggerOp === '==' ? 'selected' : ''}>＝</option>
+                <option value="<" ${st.triggerOp === '<' ? 'selected' : ''}>＜</option>
+                <option value=">" ${st.triggerOp === '>' ? 'selected' : ''}>＞</option>
+              </select>
+
+              <input type="number" value="${st.triggerVal ?? 0}" onchange="updateHUDStateProp(${idx}, 'triggerVal', Number(this.value))" class="col-span-4 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-xs text-slate-200 font-mono" placeholder="觸發數值">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">觸發視覺特效</label>
+              <select onchange="updateHUDStateProp(${idx}, 'effect', this.value)" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200">
+                <option value="none" ${st.effect === 'none' ? 'selected' : ''}>無特別特效</option>
+                <option value="low-hp" ${st.effect === 'low-hp' ? 'selected' : ''}>⚠️ 低血量閃紅脈衝</option>
+                <option value="rage" ${st.effect === 'rage' ? 'selected' : ''}>🔥 狂暴火焰氣場</option>
+                <option value="glitch" ${st.effect === 'glitch' ? 'selected' : ''}>👾 Glitch 畫面抖動</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">觸發 8-Bit 音效</label>
+              <select onchange="updateHUDStateProp(${idx}, 'sfx', this.value)" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200">
+                <option value="none" ${st.sfx === 'none' ? 'selected' : ''}>靜音 (無音效)</option>
+                <option value="heart" ${st.sfx === 'heart' ? 'selected' : ''}>💖 好感音效 (Heart)</option>
+                <option value="glitch" ${st.sfx === 'glitch' ? 'selected' : ''}>👾 故障音效 (Glitch)</option>
+                <option value="levelUp" ${st.sfx === 'levelUp' ? 'selected' : ''}>⚔️ 升級音效 (LevelUp)</option>
+                <option value="coin" ${st.sfx === 'coin' ? 'selected' : ''}>🪙 金幣音效 (Coin)</option>
+                <option value="heal" ${st.sfx === 'heal' ? 'selected' : ''}>✨ 治癒音效 (Heal)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addCustomHUDState() {
+      const newId = "state-" + Date.now();
+      hudData.customStates.push({
+        id: newId,
+        name: "新狀態",
+        badgeText: "✨ 新狀態啟動",
+        effect: "none",
+        sfx: "heal",
+        triggerFieldId: "",
+        triggerOp: "<=",
+        triggerVal: 0
+      });
+      renderStatesEditPanel();
+      renderTopStateButtons();
+      updateHUD();
+    }
+
+    function removeHUDState(idx) {
+      if (hudData.customStates.length <= 1) return;
+      hudData.customStates.splice(idx, 1);
+      renderStatesEditPanel();
+      renderTopStateButtons();
+      if (!hudData.customStates.some(s => s.id === hudData.currentState)) {
+        setHUDState(hudData.customStates[0].id);
+      } else {
+        updateHUD();
+      }
+    }
+
+    function updateHUDStateProp(idx, prop, val) {
+      hudData.customStates[idx][prop] = val;
+      renderTopStateButtons();
+      checkAutoStateTriggers();
+      if (hudData.currentState === hudData.customStates[idx].id) {
+        setHUDState(hudData.currentState);
+      }
+    }
+
+    /* Set Reactive State Simulation Class */
+    function setHUDState(stateId, isAutoTriggered = false) {
+      hudData.currentState = stateId;
+      const card = document.getElementById('hud-card');
+      const badge = document.getElementById('hud-state-badge');
+      
+      const stConfig = hudData.customStates.find(s => s.id === stateId) || hudData.customStates[0];
+
+      // Remove Effect Classes
+      card.classList.remove('hud-state-low-hp', 'hud-state-rage', 'hud-state-glitch');
+      
+      // Update Navbar Buttons Active State
+      renderTopStateButtons();
+
+      // Apply Effect & Badge
+      if (stConfig.effect === 'low-hp') card.classList.add('hud-state-low-hp');
+      if (stConfig.effect === 'rage') card.classList.add('hud-state-rage');
+      if (stConfig.effect === 'glitch') card.classList.add('hud-state-glitch');
+
+      badge.innerText = stConfig.badgeText;
+
+      // Play Bound SFX
+      if (stConfig.sfx && stConfig.sfx !== 'none') {
+        playSFX(stConfig.sfx);
+      }
+    }
+
+    /* Switch Control Tabs */
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500', 'bg-slate-800/40');
+        btn.classList.add('text-slate-400');
+      });
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      const activeContent = document.getElementById(`tab-content-${tabId}`);
+      if (activeBtn && activeContent) {
+        activeBtn.classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500', 'bg-slate-800/40');
+        activeBtn.classList.remove('text-slate-400');
+        activeContent.classList.remove('hidden');
+      }
+    }
+
+    /* Render Built-in Gallery */
+    function renderGallery() {
+      for (const [catKey, items] of Object.entries(PRESET_GALLERY)) {
+        const container = document.getElementById(`gallery-${catKey}`);
+        if (!container) continue;
+        container.innerHTML = items.map(item => `
+          <button onclick="selectGalleryAccessory('${item.id}')" class="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl flex flex-col items-center justify-center space-y-1 transition group">
+            <div class="group-hover:scale-110 transition-transform">${item.svg}</div>
+            <span class="text-[10px] text-slate-400 truncate w-full text-center">${item.name}</span>
+          </button>
+        `).join('');
+      }
+    }
+
+    function selectGalleryAccessory(spriteId) {
+      hudData.accessory.svgKey = spriteId;
+      playSFX('heal');
+      updateHUD();
+    }
+
+    function removeActiveAccessory() {
+      hudData.accessory.svgKey = null;
+      updateHUD();
+    }
+
+    /* Update Avatar File Source */
+    function updateAvatarSource() {
+      hudData.avatarUrl = document.getElementById('cfg-avatar-url').value;
+      updateHUD();
+    }
+
+    function handleFileUpload(event, type) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        if (type === 'avatar') {
+          hudData.avatarUrl = e.target.result;
+          document.getElementById('cfg-avatar-url').value = "本地上傳圖片";
+          updateHUD();
+        } else if (type === 'pixel') {
+          hudData.avatarUrl = e.target.result;
+          document.getElementById('cfg-avatar-url').value = "像素模式上傳圖片";
+          document.getElementById('cfg-pixel-enable').checked = true;
+          updatePixelArtProcess();
+          updateHUD();
+        } else if (type === 'accessory') {
+          const imgUrl = e.target.result;
+          hudData.accessory.customImgUrl = imgUrl;
+          hudData.accessory.svgKey = 'custom';
+          playSFX('heal');
+          updateHUD();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /* ================= MAIN HUD RENDERER ================= */
+    function updateHUD() {
+      // Basic Info
+      hudData.name = document.getElementById('cfg-char-name').value;
+      hudData.title = document.getElementById('cfg-char-title').value;
+      
+      document.getElementById('hud-char-name').innerText = hudData.name;
+      document.getElementById('hud-char-title').innerText = hudData.title;
+
+      // Color & Design Tokens
+      hudData.bgColor = document.getElementById('cfg-bg-color').value;
+      hudData.textColor = document.getElementById('cfg-text-color').value;
+      hudData.borderColor = document.getElementById('cfg-border-color').value;
+      hudData.glowColor = document.getElementById('cfg-glow-color').value;
+
+      hudData.bgOpacity = document.getElementById('cfg-bg-opacity').value;
+      hudData.bgBlur = document.getElementById('cfg-bg-blur').value;
+      hudData.borderWidth = document.getElementById('cfg-border-width').value;
+      hudData.borderRadius = document.getElementById('cfg-border-radius').value;
+      hudData.glowIntensity = document.getElementById('cfg-glow-intensity').value;
+
+      hudData.barStyle = document.getElementById('cfg-bar-style').value;
+      hudData.barFill = document.getElementById('cfg-bar-fill').value;
+      hudData.barTrack = document.getElementById('cfg-bar-track').value;
+      hudData.barHeight = document.getElementById('cfg-bar-height').value;
+      hudData.barRadius = document.getElementById('cfg-bar-radius').value;
+
+      hudData.accessory.offsetX = document.getElementById('cfg-acc-x').value;
+      hudData.accessory.offsetY = document.getElementById('cfg-acc-y').value;
+      hudData.accessory.scale = document.getElementById('cfg-acc-scale').value;
+      hudData.accessory.rotation = document.getElementById('cfg-acc-rot').value;
+
+      // Color Label Updates
+      document.getElementById('val-bg-color').innerText = hudData.bgColor;
+      document.getElementById('val-text-color').innerText = hudData.textColor;
+      document.getElementById('val-border-color').innerText = hudData.borderColor;
+      document.getElementById('val-glow-color').innerText = hudData.glowColor;
+
+      // Apply HUD Outer Card Styles
+      const card = document.getElementById('hud-card');
+      const hexOpacity = Math.round((hudData.bgOpacity / 100) * 255).toString(16).padStart(2, '0');
+      card.style.backgroundColor = `${hudData.bgColor}${hexOpacity}`;
+      card.style.backdropFilter = `blur(${hudData.bgBlur}px)`;
+      card.style.color = hudData.textColor;
+      card.style.border = `${hudData.borderWidth}px solid ${hudData.borderColor}`;
+      card.style.borderRadius = `${hudData.borderRadius}px`;
+      card.style.boxShadow = `0 0 ${hudData.glowIntensity}px ${hudData.glowColor}80`;
+
+      // Render Accessories
+      const accLayer = document.getElementById('hud-accessory-layer');
+      if (hudData.accessory.svgKey === 'custom' && hudData.accessory.customImgUrl) {
+        accLayer.innerHTML = `<img src="${hudData.accessory.customImgUrl}" class="w-12 h-12 object-contain" />`;
+        accLayer.style.transform = `translate(${hudData.accessory.offsetX}px, ${hudData.accessory.offsetY}px) scale(${hudData.accessory.scale}) rotate(${hudData.accessory.rotation}deg)`;
+        accLayer.style.top = "10px";
+        accLayer.style.right = "20px";
+      } else if (hudData.accessory.svgKey) {
+        let foundItem = null;
+        for (const cat of Object.values(PRESET_GALLERY)) {
+          const match = cat.find(i => i.id === hudData.accessory.svgKey);
+          if (match) { foundItem = match; break; }
+        }
+        if (foundItem) {
+          accLayer.innerHTML = foundItem.svg;
+          accLayer.style.transform = `translate(${hudData.accessory.offsetX}px, ${hudData.accessory.offsetY}px) scale(${hudData.accessory.scale}) rotate(${hudData.accessory.rotation}deg)`;
+          accLayer.style.top = "10px";
+          accLayer.style.right = "20px";
+        }
+      } else {
+        accLayer.innerHTML = "";
+      }
+
+      // Update Avatar
+      const avatarImg = document.getElementById('hud-avatar-img');
+      avatarImg.src = hudData.avatarUrl;
+
+      // Evaluate trigger conditions
+      checkAutoStateTriggers();
+
+      // Render Sections & Subfields
+      renderHUDSections();
+
+      // Process Pixel Art Filter if enabled
+      if (hudData.pixel.enable) {
+        processPixelArtCanvas();
+      }
+    }
+
+    /* Render HUD Live Canvas Sections */
+    function renderHUDSections() {
+      const container = document.getElementById('hud-sections-render');
+      container.innerHTML = hudData.sections.map((sec, secIdx) => `
+        <div class="border border-slate-800/80 rounded-xl overflow-hidden bg-slate-950/40">
+          <button onclick="toggleSectionCollapse(${secIdx})" class="w-full px-3 py-2 bg-slate-900/60 flex items-center justify-between text-xs font-bold text-slate-300 hover:bg-slate-800/50 transition">
+            <span class="flex items-center space-x-2">
+              <i class="fa-solid fa-chevron-${sec.isOpen ? 'down' : 'right'} text-indigo-400"></i>
+              <span>${sec.title}</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-mono">${sec.fields.length} 欄位</span>
+          </button>
+          
+          ${sec.isOpen ? `
+            <div class="p-3 space-y-3 transition-all">
+              ${sec.fields.map(f => renderFieldItem(f)).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    function renderFieldItem(f) {
+      switch (f.type) {
+        case 'progressbar':
+          const pct = Math.min(100, Math.max(0, Math.round((f.value / f.max) * 100)));
+          
+          // Determine Style Fill
+          let fillBg = hudData.barFill;
+          let extraClasses = "";
+          let extraInnerHTML = "";
+
+          if (hudData.barStyle === 'favor-shift') {
+            if (pct < 25) fillBg = "#3b82f6"; // Cold blue
+            else if (pct < 50) fillBg = "#8b5cf6"; // Purple
+            else if (pct < 75) fillBg = "#ec4899"; // Warm Rose
+            else fillBg = "#f43f5e"; // Crimson Pink
+          } else if (hudData.barStyle === 'liquid-bubbles') {
+            extraInnerHTML = `<div class="absolute inset-0 overflow-hidden pointer-events-none"><span class="animate-bubble absolute bottom-0 left-1/4 w-1.5 h-1.5 bg-white/60 rounded-full"></span><span class="animate-bubble absolute bottom-0 left-2/3 w-2 h-2 bg-white/50 rounded-full" style="animation-delay:0.8s;"></span></div>`;
+          } else if (hudData.barStyle === 'fluid-wave') {
+            extraClasses = "relative overflow-hidden";
+            extraInnerHTML = `<div class="animate-wave absolute top-0 left-0 right-0 bottom-0 opacity-40 bg-white/30"></div>`;
+          } else if (hudData.barStyle === 'shimmer') {
+            extraInnerHTML = `<div class="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"></div>`;
+          } else if (hudData.barStyle === 'rainbow') {
+            extraClasses = "animate-rainbow bg-gradient-to-r from-red-500 via-green-500 to-blue-500";
+          } else if (hudData.barStyle === 'crt-pixel') {
+            extraClasses = "bg-[repeating-linear-gradient(90deg,transparent,transparent_4px,rgba(0,0,0,0.4)_4px,rgba(0,0,0,0.4)_6px)]";
+          }
+
+          return `
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-slate-300 font-medium">${f.name}</span>
+                <span class="font-mono text-slate-400">${f.value} / ${f.max} (${pct}%)</span>
+              </div>
+              <div class="w-full relative overflow-hidden" style="height:${hudData.barHeight}px; background-color:${hudData.barTrack}; border-radius:${hudData.barRadius}px;">
+                <div class="h-full transition-all duration-300 ${extraClasses}" style="width:${pct}%; background-color:${fillBg}; border-radius:${hudData.barRadius}px;">
+                  ${extraInnerHTML}
+                </div>
+              </div>
+            </div>
+          `;
+        case 'heart':
+          let hearts = '';
+          for (let i = 1; i <= f.max; i++) {
+            if (i <= f.rating) {
+              hearts += `<i class="fa-solid fa-heart text-pink-500 text-sm"></i>`;
+            } else {
+              hearts += `<i class="fa-regular fa-heart text-slate-600 text-sm"></i>`;
+            }
+          }
+          return `
+            <div class="flex items-center justify-between text-xs py-0.5">
+              <span class="text-slate-300 font-medium">${f.name}</span>
+              <div class="flex space-x-1">${hearts}</div>
+            </div>
+          `;
+        case 'badge':
+          return `
+            <div class="flex items-center justify-between text-xs py-0.5">
+              <span class="text-slate-300 font-medium">${f.name}</span>
+              <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md font-medium text-[11px]">${f.text}</span>
+            </div>
+          `;
+        case 'numeric':
+          return `
+            <div class="flex items-center justify-between text-xs py-0.5">
+              <span class="text-slate-300 font-medium">${f.name}</span>
+              <span class="font-mono font-bold text-amber-400 text-sm">${f.val}</span>
+            </div>
+          `;
+        case 'text':
+          return `
+            <div class="flex items-center justify-between text-xs py-0.5">
+              <span class="text-slate-300 font-medium">${f.name}</span>
+              <span class="text-slate-400 italic">${f.text}</span>
+            </div>
+          `;
+      }
+    }
+
+    function toggleSectionCollapse(index) {
+      hudData.sections[index].isOpen = !hudData.sections[index].isOpen;
+      updateHUD();
+    }
+
+    /* ================= EDIT PANEL SECTIONS BUILDER ================= */
+    function renderSectionsEditPanel() {
+      const container = document.getElementById('sections-container');
+      container.innerHTML = hudData.sections.map((sec, secIdx) => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-3">
+          <div class="flex items-center space-x-2">
+            <input type="text" value="${sec.title}" onchange="updateSectionTitle(${secIdx}, this.value)" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 font-bold focus:border-indigo-500">
+            <button onclick="removeSection(${secIdx})" class="text-red-400 hover:text-red-300 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+          </div>
+
+          <!-- Fields List -->
+          <div class="space-y-2 pl-2 border-l-2 border-slate-800">
+            ${sec.fields.map((f, fIdx) => `
+              <div class="bg-slate-950 p-2 rounded-lg border border-slate-800/80 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-bold text-indigo-400 uppercase">${f.type}</span>
+                  <button onclick="removeField(${secIdx}, ${fIdx})" class="text-slate-500 hover:text-red-400 text-xs"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="text" value="${f.name}" onchange="updateFieldName(${secIdx}, ${fIdx}, this.value)" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200" placeholder="欄位名稱">
+                  ${renderFieldEditorControls(secIdx, fIdx, f)}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="pt-1 flex space-x-1">
+            <button onclick="addField(${secIdx}, 'progressbar')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded">+ 進度條</button>
+            <button onclick="addField(${secIdx}, 'heart')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded">+ 愛心評級</button>
+            <button onclick="addField(${secIdx}, 'badge')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded">+ 標籤 Badge</button>
+            <button onclick="addField(${secIdx}, 'numeric')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1 rounded">+ 數字值</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderFieldEditorControls(sIdx, fIdx, f) {
+      if (f.type === 'progressbar') {
+        return `
+          <div class="flex items-center space-x-1">
+            <input type="number" value="${f.value}" onchange="updateFieldValue(${sIdx}, ${fIdx}, 'value', this.value)" class="w-12 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-xs text-slate-200">
+            <span class="text-slate-500 text-xs">/</span>
+            <input type="number" value="${f.max}" onchange="updateFieldValue(${sIdx}, ${fIdx}, 'max', this.value)" class="w-12 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-xs text-slate-200">
+          </div>
+        `;
+      } else if (f.type === 'heart') {
+        return `
+          <div class="flex items-center space-x-1">
+            <span class="text-[10px] text-slate-400">得分:</span>
+            <input type="number" min="0" max="5" value="${f.rating}" onchange="updateFieldValue(${sIdx}, ${fIdx}, 'rating', this.value)" class="w-12 bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-xs text-slate-200">
+          </div>
+        `;
+      } else if (f.type === 'badge' || f.type === 'text') {
+        return `
+          <input type="text" value="${f.text || ''}" onchange="updateFieldValue(${sIdx}, ${fIdx}, 'text', this.value)" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200" placeholder="內容">
+        `;
+      } else if (f.type === 'numeric') {
+        return `
+          <input type="number" value="${f.val || 0}" onchange="updateFieldValue(${sIdx}, ${fIdx}, 'val', this.value)" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200">
+        `;
+      }
+    }
+
+    function addSection() {
+      hudData.sections.push({
+        id: "sec-" + Date.now(),
+        title: "新狀態大標題",
+        isOpen: true,
+        fields: [{ id: "f-" + Date.now(), type: "text", name: "欄位說明", text: "範例文字" }]
+      });
+      renderSectionsEditPanel();
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function removeSection(sIdx) {
+      hudData.sections.splice(sIdx, 1);
+      renderSectionsEditPanel();
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function updateSectionTitle(sIdx, val) {
+      hudData.sections[sIdx].title = val;
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function addField(sIdx, type) {
+      const fieldObj = { id: "f-" + Date.now(), type, name: "新屬性" };
+      if (type === 'progressbar') { fieldObj.value = 50; fieldObj.max = 100; }
+      if (type === 'heart') { fieldObj.rating = 3; fieldObj.max = 5; }
+      if (type === 'badge') { fieldObj.text = "Active"; }
+      if (type === 'numeric') { fieldObj.val = 10; }
+      if (type === 'text') { fieldObj.text = "內容說明"; }
+
+      hudData.sections[sIdx].fields.push(fieldObj);
+      renderSectionsEditPanel();
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function removeField(sIdx, fIdx) {
+      hudData.sections[sIdx].fields.splice(fIdx, 1);
+      renderSectionsEditPanel();
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function updateFieldName(sIdx, fIdx, val) {
+      hudData.sections[sIdx].fields[fIdx].name = val;
+      renderStatesEditPanel();
+      updateHUD();
+    }
+
+    function updateFieldValue(sIdx, fIdx, key, val) {
+      hudData.sections[sIdx].fields[fIdx][key] = (key === 'value' || key === 'max' || key === 'rating' || key === 'val') ? Number(val) : val;
+      updateHUD();
+    }
+
+    /* ================= DUAL PIXEL ART ENGINE ================= */
+    function updatePixelArtProcess() {
+      hudData.pixel.enable = document.getElementById('cfg-pixel-enable').checked;
+      hudData.pixel.palette = document.getElementById('cfg-pixel-palette').value;
+      hudData.pixel.factor = document.getElementById('cfg-pixel-factor').value;
+      hudData.pixel.dither = document.getElementById('cfg-pixel-dither').checked;
+
+      const avatarImg = document.getElementById('hud-avatar-img');
+      const avatarCanvas = document.getElementById('hud-avatar-canvas');
+
+      if (hudData.pixel.enable) {
+        avatarImg.classList.add('hidden');
+        avatarCanvas.classList.remove('hidden');
+        processPixelArtCanvas();
+      } else {
+        avatarImg.classList.remove('hidden');
+        avatarCanvas.classList.add('hidden');
+      }
+    }
+
+    function processPixelArtCanvas() {
+      const avatarCanvas = document.getElementById('hud-avatar-canvas');
+      const ctx = avatarCanvas.getContext('2d');
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = hudData.avatarUrl;
+
+      img.onload = function() {
+        const factor = parseInt(hudData.pixel.factor);
+        avatarCanvas.width = factor;
+        avatarCanvas.height = factor;
+
+        ctx.drawImage(img, 0, 0, factor, factor);
+        const imgData = ctx.getImageData(0, 0, factor, factor);
+        const data = imgData.data;
+
+        // Apply Hardware Palette Quantization
+        const palette = getPaletteColors(hudData.pixel.palette);
+        if (palette) {
+          for (let i = 0; i < data.length; i += 4) {
+            const nearest = findNearestColor(data[i], data[i+1], data[i+2], palette);
+            data[i] = nearest[0];
+            data[i+1] = nearest[1];
+            data[i+2] = nearest[2];
+          }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+      };
+    }
+
+    function getPaletteColors(name) {
+      switch (name) {
+        case 'gameboy':
+          return [[15, 56, 15], [48, 98, 48], [139, 172, 15], [155, 188, 15]];
+        case 'cyberpunk':
+          return [[15, 23, 42], [236, 72, 153], [99, 102, 241], [34, 211, 238], [250, 204, 21], [239, 68, 68]];
+        case 'pico8':
+          return [[0,0,0],[29,43,83],[126,37,83],[0,135,81],[171,82,54],[95,87,79],[194,195,199],[255,241,232],[255,0,77],[255,163,0],[255,236,39],[0,228,54],[41,173,255],[131,118,156],[255,119,168],[255,204,170]];
+        case 'monochrome':
+          return [[0,0,0], [255,255,255]];
+        default:
+          return null;
+      }
+    }
+
+    function findNearestColor(r, g, b, palette) {
+      let minDist = Infinity;
+      let nearest = palette[0];
+      for (const col of palette) {
+        const dist = Math.pow(r - col[0], 2) + Math.pow(g - col[1], 2) + Math.pow(b - col[2], 2);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = col;
+        }
+      }
+      return nearest;
+    }
+
+    /* ================= WEB AUDIO 8-BIT SYNTHESIZER ================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSFX(type) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'heart') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'coin') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(987.77, now); // B5
+        osc.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'levelUp') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(554.37, now + 0.08);
+        osc.frequency.setValueAtTime(659.25, now + 0.16);
+        osc.frequency.setValueAtTime(880, now + 0.24);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      } else if (type === 'glitch') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.05);
+        osc.frequency.linearRampToValueAtTime(200, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'heal') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      }
+    }
+
+    /* Interactive Click Burst FX */
+    function triggerBurstFX(e) {
+      playSFX('heart');
+
+      const wrapper = document.getElementById('hud-preview-wrapper');
+      const rect = wrapper.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const icons = ['❤️', '✨', '💖', '⭐', '🌸'];
+
+      for (let i = 0; i < 6; i++) {
+        const p = document.createElement('div');
+        p.className = 'burst-particle text-sm select-none';
+        p.innerText = icons[Math.floor(Math.random() * icons.length)];
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+
+        const dx = (Math.random() - 0.5) * 120;
+        const dy = (Math.random() - 0.5) * 120 - 30;
+        const rot = (Math.random() - 0.5) * 360;
+
+        p.style.setProperty('--dx', `${dx}px`);
+        p.style.setProperty('--dy', `${dy}px`);
+        p.style.setProperty('--rot', `${rot}deg`);
+
+        wrapper.appendChild(p);
+        setTimeout(() => p.remove(), 800);
+      }
+    }
+
+    /* ================= EXPORTERS & CODE GENERATORS ================= */
+    function generateHTMLEmbedCode() {
+      const code = `
+<!-- AI Roleplay Dynamic Interactive HUD Embed -->
+<div id="ai-hud-box" style="background-color:${hudData.bgColor}${Math.round((hudData.bgOpacity / 100) * 255).toString(16).padStart(2, '0')}; color:${hudData.textColor}; border:${hudData.borderWidth}px solid ${hudData.borderColor}; border-radius:${hudData.borderRadius}px; box-shadow:0 0 ${hudData.glowIntensity}px ${hudData.glowColor}80; padding:16px; font-family:sans-serif; backdrop-filter:blur(${hudData.bgBlur}px);">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+    <img src="${hudData.avatarUrl}" style="width:56px; height:56px; border-radius:12px; object-fit:cover; border:2px solid ${hudData.borderColor};">
+    <div>
+      <div style="font-weight:bold; font-size:16px;">${hudData.name}</div>
+      <div style="font-size:12px; opacity:0.7;">${hudData.title}</div>
+    </div>
+  </div>
+  <!-- Dynamic Status Sections -->
+  ${hudData.sections.map(s => `
+    <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px;">
+      <div style="font-size:11px; font-weight:bold; opacity:0.8; margin-bottom:6px;">${s.title}</div>
+      ${s.fields.map(f => `
+        <div style="font-size:12px; margin-bottom:4px; display:flex; justify-content:space-between;">
+          <span>${f.name}</span>
+          <span>${f.value ? f.value + '/' + f.max : f.text || f.val || ''}</span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('')}
+</div>
+      `.trim();
+
+      showModal("全功能 HTML 嵌入代碼", code);
+    }
+
+    function generateAIPrompt() {
+      const prompt = `
+[AI Roleplay System Status HUD Rule]
+You MUST output and update the following status HUD at the end of every response based on {{char}}'s emotional state and dialogue progression.
+
+Status HUD Format:
+----------------------------------------
+【角色名】: ${hudData.name} (${hudData.title})
+${hudData.sections.map(s => `
+[${s.title}]
+` + s.fields.map(f => ` - ${f.name}: ${f.value ? f.value + '/' + f.max : f.text || f.val || ''}`).join('\n')).join('\n')}
+----------------------------------------
+Rule: Dynamics for {{char}}'s favorability/emotions should organically change values according to user ({{user}}) inputs.
+      `.trim();
+
+      showModal("AI System Prompt 語法 (SillyTavern / ChatGPT / Claude)", prompt);
+    }
+
+    function exportPNG() {
+      alert("截圖準備中：請使用瀏覽器標準快捷鍵 (Win+Shift+S / Cmd+Shift+4) 選擇右側 Live Preview 視窗進行超高畫質無損截圖！");
+    }
+
+    function exportJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(hudData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `AI_HUD_Config_${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function resetToDefaults() {
+      if (confirm("確定要重置所有 HUD 設定至預設狀態嗎？")) {
+        location.reload();
+      }
+    }
+
+    /* Modal Helper */
+    function showModal(title, code) {
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-code-area').value = code;
+      document.getElementById('code-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('code-modal').classList.add('hidden');
+    }
+
+    function copyModalCode() {
+      const codeArea = document.getElementById('modal-code-area');
+      codeArea.select();
+      document.execCommand('copy');
+      alert("已成功複製到剪貼簿！");
+    }
+  </script>
+</body>
+</html>
